@@ -20,6 +20,7 @@ running the script.
 from Bio.Blast import NCBIWWW
 from Bio import SearchIO
 from Bio.Align.Applications import ClustalwCommandline
+from Bio.Blast.Applications import NcbiblastpCommandline
 from Bio import AlignIO
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,30 +30,44 @@ aas =['V','I','L','E','Q', \
 'R','K','S','T','M','A', \
 'G','P','C','-']
 
-def run_blast():
-    
-    # Read the input file and get the sequence
-    
-    with open("input.txt", "r") as f:
-        in_file = f.read().strip()
-        
-    # Blast the sequence over the internet (you may have to wait) and 
-    # save the results in a qblast object
-    
-    result_handle = NCBIWWW.qblast("blastp", "nr", 
-                                   in_file, hitlist_size=200)
-    
-    # Open the output file then read the results object and write to 
-    # the output file
-    
-    with open("output.xml", "w") as out_handle:
-        out_handle.write(result_handle.read())
+def Run_blast(local=False, infile=None, outfile=None, 
+              max_hits=100):
 
-def write_sequences():
+    # Read the input file and get the sequence
+    print('\nBlasting sequence from '+infile+'...')
+    print('Maximum number of hits set to '+str(max_hits))
+    with open(infile, "r") as f:
+        in_file = f.read().strip()
+
+    if local == False:
+        
+        # Blast the sequence over the internet (you may have to wait) and 
+        # save the results in a qblast object
+        result_handle = NCBIWWW.qblast("blastp", "nr", 
+                                       in_file, hitlist_size=max_hits)
+        
+        
+        # Open the output file then read the results object and write to 
+        # the output file
+        print('\tDone: writing to '+outfile)
+        
+        with open(outfile, "w") as out_handle:
+            out_handle.write(result_handle.read())
+            
+    
+    if local == True:
+        
+        cmd = NcbiblastpCommandline(query=in_file, db='nr', outfmt=5, 
+                                    out=outfile)
+        cmd
+        
+def xml2fasta(infile=None, outfile=None):
+    
+    print('\nConverting '+infile+' to fasta format, removing duplicates...')
+
     
     # Load the blast output file
-    
-    blast_qresult = SearchIO.read("output.xml", 
+    blast_qresult = SearchIO.read(infile, 
                                   "blast-xml")
 
     # Iterate through ids and sequences and add them to lists. Sequences are
@@ -70,20 +85,28 @@ def write_sequences():
     # Open the sequences output file then for each high-scoring pair
     # in the blast results, write the hit ID (proceeded by a ">" for 
     # fasta format), followed by the hit sequence on the next line    
-    with open("sequences.fasta", "w") as f:
+    with open(outfile, "w") as f:
         for i, s in zip(ids, sequences):
             f.write('> '+i+'\n')
             f.write(s+'\n')
+    
+    print('\tDone: writing to '+outfile)
 
-def clustal_alignment():
+def Clustal_alignment(xmlfile=None, fastafile=None, alnfile=None):
+    
+    if fastafile is None:
+        fastafile = xmlfile.replace('.xml','.fasta')
+        xml2fasta(infile=xmlfile, outfile=fastafile)
     
     # Run the command line version of clustal using the sequences.fasta
     # file and output to a clustal format alignment file
-    
-    cmd = ClustalwCommandline("clustalw", 
-                              infile="sequences.fasta", 
-                              outfile="alignment.aln")
+    print('\nAligning '+fastafile+' with clustal...')
+    cmd = ClustalwCommandline("clustalo", 
+                              infile=fastafile, 
+                              outfile=alnfile)
     cmd()
+    print('\tDone: writing to '+alnfile)
+
     
 def MSA_matrix():
     
@@ -144,7 +167,10 @@ def frequency():
         
     return np.array(F)
             
-def consensus_seq():
+def Consensus_seq(alnfile=None, confile=None):
+    
+    print('\nCalculating consensus sequence from '+alnfile+'...')
+    
     
     # Generate a frequency matrix
     F = frequency()
@@ -169,26 +195,31 @@ def consensus_seq():
         
         # Add the max frequency to the consensus frequency list
         con_freq.append(np.amax(i))
+    
+    if confile:
+        with open(confile, 'w+') as f:
+            for aa, i in zip(con_seq, con_freq):
+                f.write(aa+' '+str(i)+'\n')
+        f.close()
+            
+        print('\tDone: writing to '+confile)
 
     return con_seq, con_freq
 
-def plot_consensus_frequency_versus_position():
+def Plot_consensus(alnfile=None, plotfile=None):
     
     # Generate the consensus frequency list (consensus_seq() returns two
     # variable, so we need to create a variable name for both even though
     # we will only need con_freq)
-    con_seq, con_freq = consensus_seq()
-    
+    con_seq, con_freq = Consensus_seq(alnfile=alnfile)
+    print('\tDone')
+    print('\nPlotting consensus sequence from '+alnfile+'...')
     plt.plot(range(1, len(con_freq)+1), con_freq)
     plt.xlim(1, len(con_freq))
     plt.xlabel('Position')
     plt.ylabel('Frequency')
-    plt.savefig('consensus_frequency_versus_position.png', dpi = 300)
-
-
-write_sequences()
-clustal_alignment()
-print(consensus_seq())
+    plt.savefig(plotfile, dpi = 300)
+    print('\tDone: writing to '+plotfile)
 
 
 
