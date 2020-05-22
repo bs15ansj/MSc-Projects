@@ -1,10 +1,9 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Sun May  3 20:51:30 2020
-
 @author: bs15ansj
-
 This is a small script to help you get used to using biopython. In order to
 perform the clustalw multiple sequence alignment, make sure you have clustal
 installed. You can do this using the following commands:
@@ -14,7 +13,6 @@ installed. You can do this using the following commands:
     
 Once installed, make sure that you close the terminal and reopen before 
 running the script. 
-
 """
 
 from Bio.Blast import NCBIWWW
@@ -101,17 +99,18 @@ def Clustal_alignment(xmlfile=None, fastafile=None, alnfile=None):
     # Run the command line version of clustal using the sequences.fasta
     # file and output to a clustal format alignment file
     print('\nAligning '+fastafile+' with clustal...')
-    cmd = ClustalwCommandline("clustalo", 
+    clustalo_exe = r"D:\Affimer_project\clustal-omega-1.2.2-win64\clustalo.exe"
+    cmd = ClustalwCommandline(clustalo_exe, 
                               infile=fastafile, 
                               outfile=alnfile)
     cmd()
     print('\tDone: writing to '+alnfile)
 
     
-def MSA_matrix():
+def MSA_matrix(alnf):
     
     # Read the clustal alignment
-    align = AlignIO.read("alignment.aln",'clustal')
+    align = AlignIO.read(alnf,'clustal')
     
     # Read sequences, convert each to list and add to matrix
     matrix = []
@@ -120,11 +119,11 @@ def MSA_matrix():
     matrix = np.array(matrix)
     return matrix     
     
-def frequency():
+def frequency(alnf):
 
     # Generate the MSA matrix and create a new empty frequency matrix
     
-    M = MSA_matrix()
+    M = MSA_matrix(alnf)
     F = []
     
     # Set the number of sequences equal to the number of rows in the matrix
@@ -167,13 +166,13 @@ def frequency():
         
     return np.array(F)
             
-def Consensus_seq(alnfile=None, confile=None):
+def Consensus_seq(alnf,alnfile=None, confile=None):
     
     print('\nCalculating consensus sequence from '+alnfile+'...')
     
     
     # Generate a frequency matrix
-    F = frequency()
+    F = frequency(alnf)
     
     # Create empty lists for the consensus sequence, and the frequency of 
     # consensus residues
@@ -206,20 +205,31 @@ def Consensus_seq(alnfile=None, confile=None):
 
     return con_seq, con_freq
 
-def Plot_consensus(alnfile=None, plotfile=None):
+def Plot_consensus(alnf,x,alnfile=None, plotfile=None):
     
     # Generate the consensus frequency list (consensus_seq() returns two
     # variable, so we need to create a variable name for both even though
     # we will only need con_freq)
-    con_seq, con_freq = Consensus_seq(alnfile=alnfile)
+    con_seq, con_freq = Consensus_seq(alnf,alnfile=alnfile)
     print('\tDone')
     print('\nPlotting consensus sequence from '+alnfile+'...')
-    plt.plot(range(1, len(con_freq)+1), con_freq)
+    plt.plot(range(1, len(con_freq)+1), con_freq, label='Hits: '+str(x))
     plt.xlim(1, len(con_freq))
     plt.xlabel('Position')
     plt.ylabel('Frequency')
+    plt.legend(bbox_to_anchor=(1.10,1))
     plt.savefig(plotfile, dpi = 300)
     print('\tDone: writing to '+plotfile)
+    f = open('Consensus Freq.txt','a+')
+    f.write('Number of hits : ' + str(x) +'\n')
+    f.write('Frequency: '+str(con_freq)+'\n')
+    f.write("Sequence: "+str(con_seq)+'\n')
 
-
-
+def Blast_a_Bunch(x,itter=5):
+    for i in range(itter):
+        alnf = str(x)+'_align.aln'
+        Run_blast(infile='input.fasta',outfile='BLAST'+str(x)+'.xml',max_hits=x)
+        xml2fasta(infile='BLAST'+str(x)+'.xml',outfile='Blast_'+str(x)+'.fasta')
+        Clustal_alignment(fastafile='Blast_'+str(x)+'.fasta',alnfile=alnf)
+        Plot_consensus(alnf,x,alnfile=alnf,plotfile='total_graphs.png')
+        x = x+100
